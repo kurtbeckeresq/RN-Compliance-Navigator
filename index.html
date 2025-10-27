@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Untitled</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multistate Nurse-Led Practice Compliance Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The application is a dual-view SPA designed as a "State Compliance Explorer." It includes a Personalization Profile for user context. New data points for Insurance Mandates, DPC Refund Policy, and DPC Eligible Providers have been integrated into the data model and the UI. This provides a more complete operational compliance picture, linking legal structure (CPOM) with contractual necessity (DPC Mandates) and financial cost (Insurance). The Gemini API now consumes these five data pillars plus the user profile for maximally tailored, actionable advice. A new second bar chart (RNRiskChart) was added to the National Comparison View to analyze the UPOM risk landscape, addressing the need for RN-specific data. The RN UPOM Risk column has been added to the 50-State Regulatory Data table. -->
+    <!-- Visualization & Content Choices: 
+        - State-by-State Data: Dynamic HTML cards showing 5 data pillars. Interaction: Content updates on state dropdown selection.
+        - User Context Inputs: Dedicated card collects Role, Service, Entity, feeding into LLM prompts.
+        - LLM Features (Gemini API): Buttons trigger API calls using the Selected State + User Context + NEW Data Points (Insurance, DPC) to generate structured, personalized risk analysis and legal drafts. Error handling enhanced to prevent perceived failure.
+        - National Comparison Table: Now includes new columns for Insurance, DPC Contract Requirements, and RN UPOM Risk for cross-state comparison.
+        - Dual Bar Charts: Presents APRN Practice Authority alongside RN UPOM Risk for a comprehensive national view.
+        - Library/Method: Vanilla JS for all state management, DOM manipulation, and API calls. Chart.js for the two bar charts. HTML/CSS/Tailwind for all layout and structural elements.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            background-color: #F8F7F4; 
+            font-family: 'Inter', sans-serif;
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link.active {
+            color: #3B82F6;
+            border-bottom-color: #3B82F6;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .risk-high { background-color: #FEE2E2; border-left: 5px solid #EF4444; }
+        .risk-moderate { background-color: #FEF3C7; border-left: 5px solid #F59E0B; }
+        .risk-low { background-color: #D1FAE5; border-left: 5px solid #10B981; }
+        .status-implemented { color: #10B981; }
+        .status-pending { color: #F59E0B; }
+        .status-no-action { color: #EF4444; }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px; /* Max width constraint for parent div */
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 50vh;
+        }
+    </style>
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+</head>
+<body class="text-gray-800">
+
+    <div id="app" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="4xl md:text-5xl font-bold text-gray-900">Nurse-Led Practice Compliance Explorer</h1>
+            <p class="mt-3 text-lg text-gray-600 max-w-3xl mx-auto">An interactive tool to navigate the complex regulatory landscape for independent nursing practices across the United States.</p>
+        </header>
+
+        <nav class="flex justify-center border-b border-gray-200 mb-8">
+            <button id="nav-explorer" class="nav-link active py-4 px-6 text-lg font-semibold text-gray-600 hover:text-blue-500">State Explorer</button>
+            <button id="nav-comparison" class="nav-link py-4 px-6 text-lg font-semibold text-gray-600 hover:text-blue-500">National Comparison</button>
+        </nav>
+
+        <main>
+            <!-- State Explorer View -->
+            <div id="view-explorer">
+                <div class="flex flex-col items-center mb-8">
+                    <label for="state-select" class="text-xl font-semibold text-gray-700 mb-3">Select a State to Analyze</label>
+                    <select id="state-select" class="p-3 border border-gray-300 rounded-lg shadow-sm text-lg w-full max-w-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </select>
+                </div>
+                
+                <div id="state-dashboard" class="hidden">
+                    <h2 class="text-3xl font-bold text-center mb-6 text-gray-800" id="dashboard-title"></h2>
+
+                    <!-- User Context Input Card -->
+                    <div class="card p-6 mb-8 bg-blue-50 border-t-4 border-blue-500">
+                        <h3 class="text-2xl font-bold mb-3 text-blue-800">🎯 Personalize Your Compliance Profile</h3>
+                        <p class="text-blue-700 mb-4">Select your business details to receive advice uniquely tailored to your role and service type.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="input-role" class="block text-sm font-medium text-gray-700">1. Your Professional Role</label>
+                                <select id="input-role" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                    <option value="RN">Registered Nurse (RN)</option>
+                                    <option value="APRN">Advanced Practice Registered Nurse (APRN/NP)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="input-service" class="block text-sm font-medium text-gray-700">2. Primary Service Model</label>
+                                <select id="input-service" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                    <option value="Post-Op Recovery">Clinical Post-Op Recovery/Home Care</option>
+                                    <option value="Wellness Coaching">Non-Clinical Wellness Coaching/Education</option>
+                                    <option value="IV Infusion">IV Infusion Therapy (Clinical, Delegated)</option>
+                                    <option value="Mental Health">Virtual Mental Health/Counseling</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="input-entity" class="block text-sm font-medium text-gray-700">3. Current/Planned Entity Type</label>
+                                <select id="input-entity" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                    <option value="Standard LLC">Standard LLC / C-Corp</option>
+                                    <option value="PC/PLLC">Professional Entity (PC/PLLC)</option>
+                                    <option value="Not Formed">Not Yet Formed</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        <div class="card p-5 text-center">
+                            <h3 class="text-lg font-semibold text-gray-500 mb-2">APRN Practice Authority</h3>
+                            <p class="2xl font-bold" id="aprn-authority-level"></p>
+                        </div>
+                        <div class="card p-5 text-center">
+                            <h3 class="text-lg font-semibold text-gray-500 mb-2">CPOM Doctrine</h3>
+                            <p class="2xl font-bold" id="cpom-status"></p>
+                        </div>
+                        <div class="card p-5 text-center">
+                            <h3 class="text-lg font-semibold text-gray-500 mb-2">Nurse Licensure Compact (NLC)</h3>
+                            <p class="2xl font-bold" id="nlc-status"></p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-8">
+                        <!-- Corporate Entity & CPOM -->
+                        <div class="card p-6">
+                            <h3 class="2xl font-bold mb-3">Corporate Entity & Practice Ownership</h3>
+                            <p class="text-gray-600 mb-4">This section details the rules governing business structure, primarily the Corporate Practice of Medicine (CPOM) doctrine, which can prohibit non-physicians from owning clinical entities. Understanding this is the first step in structuring your practice legally.</p>
+                            <div class="p-4 rounded-lg" id="cpom-card">
+                                <p class="text-lg"><strong class="font-semibold">Mandatory Entity: </strong><span id="entity-type"></span></p>
+                                <p class="mt-2 text-gray-700" id="cpom-details"></p>
+                            </div>
+                        </div>
+
+                        <!-- LLM Feature 1: Compliance Summary & Action Plan -->
+                        <div class="card p-6 mt-8">
+                            <h3 class="2xl font-bold mb-3">✨ Generate Personalized Compliance Summary</h3>
+                            <p class="text-gray-600 mb-4">Generates a concise risk analysis and action plan tailored to your **Role**, **Service**, and **Entity Type** in **<span id="state-name-for-llm"></span>**.</p>
+                            <button id="generate-summary-btn" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200">
+                                Generate Compliance Summary (Personalized) ✨
+                            </button>
+                            <div id="summary-output" class="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50 whitespace-pre-wrap hidden"></div>
+                            <div id="summary-loading" class="mt-4 text-center hidden">
+                                <div class="animate-spin inline-block w-5 h-5 border-4 border-blue-500 border-t-transparent rounded-full mr-2"></div>
+                                <span class="text-blue-600">Analyzing personalized compliance risks...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Scope of Practice -->
+                        <div class="card p-6">
+                            <h3 class="2xl font-bold mb-3">Scope of Practice (SOP)</h3>
+                            <p class="text-gray-600 mb-4">Your professional scope of practice, defined by the state's Nurse Practice Act, dictates the clinical services you can offer and your level of autonomy. This is the most critical factor determining your operational independence.</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="p-4 rounded-lg" id="aprn-card">
+                                    <h4 class="xl font-bold mb-2">Advanced Practice (APRN/NP)</h4>
+                                    <p id="aprn-details"></p>
+                                </div>
+                                <div class="p-4 rounded-lg" id="rn-card">
+                                    <h4 class="xl font-bold mb-2">Registered Nurse (RN)</h4>
+                                    <p class="text-lg"><strong class="font-semibold">Independent Wellness Risk: </strong><span id="rn-risk"></span></p>
+                                    <p class="mt-2 text-gray-700" id="rn-details"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- LLM Feature 2: RN Service Disclaimer Draft -->
+                        <div class="card p-6 mt-8">
+                            <h3 class="2xl font-bold mb-3">✨ Draft Personalized Service Definition & Disclaimer</h3>
+                            <p class="text-gray-600 mb-4">Generates compliance language tailored to your **Service Model** in **<span id="state-name-for-disclaimer"></span>**, focusing on preventing Unlicensed Practice of Medicine (UPOM) claims.</p>
+                            <button id="generate-disclaimer-btn" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition duration-200">
+                                Generate Compliance Disclaimer Draft (Personalized) ✨
+                            </button>
+                            <div id="disclaimer-output" class="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50 whitespace-pre-wrap hidden"></div>
+                            <div id="disclaimer-loading" class="mt-4 text-center hidden">
+                                <div class="animate-spin inline-block w-5 h-5 border-4 border-indigo-500 border-t-transparent rounded-full mr-2"></div>
+                                <span class="text-indigo-600">Drafting tailored compliance language...</span>
+                            </div>
+                        </div>
+
+                        <!-- Licensure & DPC -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div class="card p-6">
+                                <h3 class="2xl font-bold mb-3">Professional Liability & Mobility</h3>
+                                <p class="text-gray-600 mb-4">This combines the need for mandatory insurance coverage with your ability to practice across state lines.</p>
+                                <div class="p-4 rounded-lg bg-gray-50 border-l-4 border-gray-400">
+                                    <p class="text-lg"><strong class="font-semibold">NLC Status: </strong><span id="nlc-status-detail"></span></p>
+                                    <p class="text-lg mt-2"><strong class="font-semibold">Insurance Mandate: </strong><span id="insurance-mandate"></span></p>
+                                    <p class="mt-2 text-gray-700" id="nlc-details"></p>
+                                </div>
+                            </div>
+                            <div class="card p-6">
+                                <h3 class="2xl font-bold mb-3">Direct Patient Care (DPC) Contract Mandates</h3>
+                                <p class="text-gray-600 mb-4">DPC laws offer insurance exemption but impose strict rules on contracts to protect consumers. Adherence is non-negotiable for DPC models.</p>
+                                <div class="p-4 rounded-lg" id="dpc-card">
+                                    <p class="text-lg"><strong class="font-semibold">DPC Exemption Law: </strong><span id="dpc-status"></span></p>
+                                    <p class="text-lg mt-2"><strong class="font-semibold">Mandatory Prorated Refund: </strong><span id="dpc-refund"></span></p>
+                                    <p class="text-lg mt-2"><strong class="font-semibold">APRN/NP Eligible Provider: </strong><span id="dpc-eligible"></span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- National Comparison View -->
+            <div id="view-comparison" class="hidden">
+                 <div class="card p-6 mb-8">
+                    <h2 class="2xl font-bold text-center mb-4">National Nurse Practice Landscape: APRN Authority vs. RN Risk</h2>
+                    <p class="text-center text-gray-600 mb-8 max-w-4xl mx-auto">This dual analysis illustrates the two critical pillars of independent practice: **Autonomy for APRNs** and **Unlicensed Practice of Medicine (UPOM) Risk for RNs**. Note that states with high APRN autonomy may still pose an extreme UPOM risk for non-APRNs.</p>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div class="chart-container">
+                             <h3 class="text-xl font-semibold text-center mb-3 text-gray-700">APRN Practice Authority (Autonomy)</h3>
+                            <canvas id="aprnChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                             <h3 class="text-xl font-semibold text-center mb-3 text-gray-700">RN Independent Practice (UPOM Risk)</h3>
+                            <canvas id="rnRiskChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-6">
+                    <h2 class="2xl font-bold mb-4">50-State Regulatory Data</h2>
+                     <p class="text-gray-600 mb-6">Use the search box to filter the table by state name. This comprehensive table allows for quick comparison of key compliance factors across all jurisdictions.</p>
+                    <input type="text" id="table-search" placeholder="Search for a state..." class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">RN UPOM Risk</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">APRN Authority</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CPOM Doctrine</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entity Mandate</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Insurance Mandate</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DPC Law</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-table-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <script>
+        // Global User Context State
+        let userContext = {
+            role: 'RN',
+            service: 'Post-Op Recovery',
+            entity: 'Standard LLC'
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- Comprehensive State Data Array (Including new Insurance and DPC Contract Mandates) ---
+            const stateData = [
+                { state: "Alabama", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Alaska", cpom: "Permissive", entity: "PC Required", nlc: "Pending", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Arizona", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Full", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP/PA)" },
+                { state: "Arkansas", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "California", cpom: "Strict", entity: "Mandatory PC", nlc: "No Action", aprn: "Restricted", rnRisk: "Extreme", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N (MD Only)" },
+                { state: "Colorado", cpom: "Permissive/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Connecticut", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Awaiting Implementation", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Delaware", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Florida", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Restricted", rnRisk: "Extreme", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Georgia", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "Moderate", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Hawaii", cpom: "Permissive/Moderate", entity: "Mandatory PC/PLLC", nlc: "No Action", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Idaho", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Illinois", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Pending", aprn: "Reduced", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Indiana", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Iowa", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Kansas", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Kentucky", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Louisiana", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "Extreme", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Maine", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Maryland", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Massachusetts", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Awaiting Implementation", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Michigan", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Pending", aprn: "Restricted", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Minnesota", cpom: "Permissive", entity: "Permissive", nlc: "Pending", aprn: "Full", rnRisk: "Moderate", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Mississippi", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Missouri", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Montana", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Nebraska", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Nevada", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "No Action", aprn: "Full", rnRisk: "Extreme", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "New Hampshire", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "New Jersey", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "New Mexico", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" },
+                { state: "New York", cpom: "Strict", entity: "Mandatory PLLC/PC", nlc: "Pending", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "North Carolina", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "North Dakota", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Ohio", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Oklahoma", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Restricted", rnRisk: "High", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Oregon", cpom: "Permissive", entity: "Permissive", nlc: "Enacted", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Pennsylvania", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Partial Implementation", aprn: "Reduced", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Rhode Island", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "South Carolina", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "South Dakota", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Tennessee", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Texas", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "Extreme", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Utah", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Vermont", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Virginia", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Restricted", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Washington", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP/PA)" },
+                { state: "West Virginia", cpom: "Strict", entity: "Mandatory PC/PLLC", nlc: "Implemented", aprn: "Reduced", rnRisk: "High", dpc: "Enacted", insurance: "Required/$1M", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "Wisconsin", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Reduced", rnRisk: "Moderate", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Wyoming", cpom: "Permissive", entity: "Permissive", nlc: "Implemented", aprn: "Full", rnRisk: "Moderate", dpc: "Enacted", insurance: "None", dpcRefund: "Mandated", dpcEligible: "Y (NP)" },
+                { state: "District of Columbia", cpom: "Strict/Moderate", entity: "Mandatory PC/PLLC", nlc: "Pending", aprn: "Full", rnRisk: "High", dpc: "No", insurance: "Required/$1M", dpcRefund: "None", dpcEligible: "N" },
+                { state: "Guam", cpom: "Permissive", entity: "Permissive", nlc: "Awaiting Implementation", aprn: "Full", rnRisk: "Moderate", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" },
+                { state: "US Virgin Islands", cpom: "Permissive", entity: "Permissive", nlc: "Awaiting Implementation", aprn: "Full", rnRisk: "Moderate", dpc: "No", insurance: "None", dpcRefund: "None", dpcEligible: "N" }
+            ];
+            // --- End of State Data Array ---
+
+
+            // Gemini API Key (Key successfully integrated below)
+            const apiKey = "AIzaSyDNxVJUI_vYOrHaLnzLykqnvtSshuYxQew";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            async function callGeminiAPI(systemPrompt, userQuery) {
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                };
+
+                let lastError = null;
+                for (let i = 0; i < 3; i++) { // Retry up to 3 times
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const result = await response.json();
+                        if (response.ok && result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts[0].text) {
+                            return result.candidates[0].content.parts[0].text;
+                        } else {
+                            lastError = result.error ? result.error.message : 'Unknown API response error.';
+                        }
+                    } catch (error) {
+                        lastError = error;
+                    }
+                    if (i < 2) await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000)); // Exponential backoff
+                }
+                throw new Error(`Failed to generate content after multiple retries. Last error: ${lastError}`);
+            }
+
+            const select = document.getElementById('state-select');
+            const dashboard = document.getElementById('state-dashboard');
+
+            const navExplorer = document.getElementById('nav-explorer');
+            const navComparison = document.getElementById('nav-comparison');
+            const viewExplorer = document.getElementById('view-explorer');
+            const viewComparison = document.getElementById('view-comparison');
+            const searchInput = document.getElementById('table-search');
+
+            // User Context Inputs
+            const inputRole = document.getElementById('input-role');
+            const inputService = document.getElementById('input-service');
+            const inputEntity = document.getElementById('input-entity');
+
+            // Update userContext on change
+            inputRole.addEventListener('change', (e) => userContext.role = e.target.value);
+            inputService.addEventListener('change', (e) => userContext.service = e.target.value);
+            inputEntity.addEventListener('change', (e) => userContext.entity = e.target.value);
+
+            const summaryBtn = document.getElementById('generate-summary-btn');
+            const summaryOutput = document.getElementById('summary-output');
+            const summaryLoading = document.getElementById('summary-loading');
+            
+            const disclaimerBtn = document.getElementById('generate-disclaimer-btn');
+            const disclaimerOutput = document.getElementById('disclaimer-output');
+            const disclaimerLoading = document.getElementById('disclaimer-loading');
+
+            // --- LLM Feature 1: Compliance Summary (Enhanced Format) ---
+
+            summaryBtn.addEventListener('click', async () => {
+                const selectedState = select.value;
+                const data = stateData.find(s => s.state === selectedState);
+                if (!data) return;
+
+                summaryOutput.classList.remove('text-red-600', 'font-semibold');
+                summaryOutput.classList.add('hidden');
+                summaryOutput.innerHTML = '';
+                summaryLoading.classList.remove('hidden');
+
+                try {
+                    const systemPrompt = "You are a specialized legal AI. Provide a direct, highly concise, and structured compliance analysis based ONLY on the provided state and user context. Your output must contain three sections: 1. Risk Profile, 2. Entity Status Check, and 3. Action Plan. Use markdown for headings, bolding, and a numbered action plan. Use brief sentences and maximize white space. Do not use legalese or introductory/concluding filler text.";
+                    
+                    const userQuery = `State: ${data.state}. CPOM Status: ${data.cpom}. APRN Authority: ${data.aprn}. RN UPOM Risk: ${data.rnRisk}. Entity Mandate: ${data.entity}. Insurance Mandate: ${data.insurance}.
+                    
+                    Generate the compliance analysis for this state, focused on the following user profile: 
+                    * User Role: ${userContext.role}
+                    * Service Model: ${userContext.service}
+                    * Current Entity Status: ${userContext.entity}
+                    
+                    The analysis must prioritize risks related to the user's specific role, service, and current entity type. Address the specific need for a PC/PLLC versus their current status if required.`;
+                    
+                    const result = await callGeminiAPI(systemPrompt, userQuery);
+                    
+                    summaryOutput.innerHTML = result;
+                    summaryOutput.classList.remove('hidden');
+
+                } catch (error) {
+                    summaryOutput.textContent = `ERROR: Failed to generate summary. (Reason: ${error.message}). Please check your API key/network connection.`;
+                    summaryOutput.classList.add('text-red-600', 'font-semibold');
+                    summaryOutput.classList.remove('hidden');
+                    console.error("Gemini API Error (Summary):", error);
+                } finally {
+                    summaryLoading.classList.add('hidden');
+                }
+            });
+
+            // --- LLM Feature 2: Disclaimer Draft (Enhanced Format) ---
+
+            disclaimerBtn.addEventListener('click', async () => {
+                const selectedState = select.value;
+                const data = stateData.find(s => s.state === selectedState);
+                if (!data) return;
+
+                disclaimerOutput.classList.remove('text-red-600', 'font-semibold');
+                disclaimerOutput.classList.add('hidden');
+                disclaimerOutput.innerHTML = '';
+                disclaimerLoading.classList.remove('hidden');
+
+                try {
+                    const systemPrompt = "You are a legal content generator. Draft two sections of compliance language suitable for an independent practice website: 1) A 'Service Definition' (short paragraph, high caution, clearly non-medical if the role is RN/Wellness) and 2) A 'Mandatory Disclaimer' (3 aggressive bullet points). Use markdown headings, bolding, and bullet points. Ensure high readability and conciseness. Tailor the language to the user's specific Service Model and Role provided.";
+
+                    const userQuery = `State: ${data.state}. RN UPOM Risk Level: ${data.rnRisk}. 
+                    
+                    Draft compliance language for the following user profile:
+                    * User Role: ${userContext.role}
+                    * Service Model: ${userContext.service}
+
+                    Focus the 'Service Definition' on compliance for their specific Service Model (${userContext.service}). For the disclaimer, emphasize the UPOM risk level of the state.`;
+                    
+                    const result = await callGeminiAPI(systemPrompt, userQuery);
+                    
+                    disclaimerOutput.innerHTML = result;
+                    disclaimerOutput.classList.remove('hidden');
+
+                } catch (error) {
+                    disclaimerOutput.textContent = `ERROR: Failed to generate disclaimer. (Reason: ${error.message}). Please check your API key/network connection.`;
+                    disclaimerOutput.classList.add('text-red-600', 'font-semibold');
+                    disclaimerOutput.classList.remove('hidden');
+                    console.error("Gemini API Error (Disclaimer):", error);
+                } finally {
+                    disclaimerLoading.classList.add('hidden');
+                }
+            });
+
+
+            function populateSelect() {
+                // Combine stateData with two non-state jurisdictions for completeness
+                const allJurisdictions = stateData.slice().sort((a, b) => a.state.localeCompare(b.state));
+                allJurisdictions.forEach(state => {
+                    const option = document.createElement('option');
+                    option.value = state.state;
+                    option.textContent = state.state;
+                    select.appendChild(option);
+                });
+            }
+
+            function getRiskClass(riskLevel) {
+                switch (riskLevel) {
+                    case 'Extreme':
+                    case 'High':
+                        return 'risk-high';
+                    case 'Strict':
+                    case 'Strict/Moderate':
+                         return 'risk-high';
+                    case 'Moderate':
+                        return 'risk-moderate';
+                    case 'Reduced':
+                         return 'risk-moderate';
+                    case 'Permissive':
+                    case 'Permissive/Moderate':
+                         return 'risk-low';
+                    case 'Full':
+                         return 'risk-low';
+                    default:
+                        return 'bg-gray-100 border-l-4 border-gray-400';
+                }
+            }
+
+            function updateDashboard(stateName) {
+                const data = stateData.find(s => s.state === stateName);
+                if (!data) return;
+                
+                dashboard.classList.remove('hidden');
+                document.getElementById('dashboard-title').textContent = `Compliance Overview: ${data.state}`;
+                
+                // Reset LLM outputs
+                summaryOutput.classList.add('hidden');
+                summaryOutput.innerHTML = '';
+                disclaimerOutput.classList.add('hidden');
+                disclaimerOutput.innerHTML = '';
+
+                // Update LLM Feature Prompts
+                document.getElementById('state-name-for-llm').textContent = data.state;
+                document.getElementById('state-name-for-disclaimer').textContent = data.state;
+
+                document.getElementById('aprn-authority-level').textContent = data.aprn;
+                document.getElementById('cpom-status').textContent = data.cpom;
+                
+                const aprnCard = document.getElementById('aprn-authority-level');
+                aprnCard.className = `text-2xl font-bold p-2 rounded-md ${getRiskClass(data.aprn)}`;
+
+                const cpomCard = document.getElementById('cpom-status');
+                cpomCard.className = `text-2xl font-bold p-2 rounded-md ${getRiskClass(data.cpom)}`;
+
+                updateCPOMCard(data);
+                updateSOPCards(data);
+                updateNLCandDPCCards(data);
+            }
+
+            function updateCPOMCard(data) {
+                const card = document.getElementById('cpom-card');
+                card.className = `p-4 rounded-lg ${getRiskClass(data.cpom)}`;
+                document.getElementById('entity-type').textContent = data.entity;
+
+                let details = '';
+                if (data.cpom === 'Strict') {
+                    details = `With a strict CPOM doctrine, non-physicians are generally prohibited from owning the entity that employs clinicians. The PC/MSO (Professional Corporation / Management Services Organization) model is often the only viable structure. This requires careful legal planning to avoid fee-splitting violations.`;
+                } else if (data.cpom.includes('Moderate')) {
+                    details = `This state has moderate CPOM enforcement. While less restrictive than strict states, it's crucial to form a Professional Entity (PC/PLLC) and ensure any management agreements do not give a non-licensed individual undue control over clinical decisions.`;
+                } else {
+                    details = `This state is permissive regarding CPOM, which simplifies business ownership. However, even without a strong CPOM doctrine, forming a professional entity (PC/PLLC) is highly recommended for liability protection and regulatory compliance. Always verify if professional incorporation is mandatory for your license type.`;
+                }
+                document.getElementById('cpom-details').textContent = details;
+            }
+
+            function updateSOPCards(data) {
+                const aprnCard = document.getElementById('aprn-card');
+                aprnCard.className = `p-4 rounded-lg ${getRiskClass(data.aprn)}`;
+
+                let aprnDetails = '';
+                if (data.aprn === 'Full') {
+                    aprnDetails = `APRNs have Full Practice Authority. You can evaluate, diagnose, order tests, and manage treatments, including prescribing, under the exclusive authority of the state board of nursing. This provides maximum autonomy and streamlines business operations.`;
+                } else if (data.aprn === 'Reduced') {
+                    aprnDetails = `APRNs have Reduced Practice Authority. This requires a career-long collaborative agreement with another health provider (usually a physician) for at least one element of your practice, increasing administrative complexity and operational costs.`;
+                } else {
+                    aprnDetails = `APRNs have Restricted Practice Authority. This is the most limiting environment, requiring career-long supervision, delegation, or team management by a physician. True operational independence is significantly constrained.`;
+                }
+                document.getElementById('aprn-details').textContent = aprnDetails;
+                
+                const rnCard = document.getElementById('rn-card');
+                rnCard.className = `p-4 rounded-lg ${getRiskClass(data.rnRisk)}`;
+                document.getElementById('rn-risk').textContent = data.rnRisk;
+
+                let rnDetails = '';
+                if (data.rnRisk === 'Extreme') {
+                    rnDetails = `The risk of Unlicensed Practice of Medicine (UPOM) is constant. Independent wellness or coaching services must be meticulously structured as purely educational and non-diagnostic to avoid severe penalties. Any interpretation of client data is highly risky.`;
+                } else if (data.rnRisk === 'High') {
+                    rnDetails = `UPOM risk is significant. Your services must not imply medical diagnosis, treatment, or management of conditions. The line between health education and medical advice is strictly enforced.`;
+                } else {
+                    rnDetails = `UPOM risk is moderate. While health promotion and counseling are within the RN scope, you must maintain a clear boundary and avoid providing services that could be interpreted as medical diagnosis or treatment.`;
+                }
+                document.getElementById('rn-details').textContent = rnDetails;
+            }
+
+            function updateNLCandDPCCards(data) {
+                // Professional Liability & Mobility Card
+                document.getElementById('nlc-status').textContent = data.nlc.replace(/([A-Z])/g, ' $1').trim();
+                document.getElementById('nlc-status-detail').textContent = data.nlc.replace(/([A-Z])/g, ' $1').trim();
+                
+                const insuranceElement = document.getElementById('insurance-mandate');
+                insuranceElement.textContent = data.insurance;
+                insuranceElement.className = data.insurance === 'None' ? 'font-semibold text-green-700' : 'font-semibold text-red-700';
+
+                let nlcDetails = '';
+                if (data.nlc === 'Implemented') {
+                    nlcDetails = `This state is a full NLC member. Practice is permitted via MSL.`;
+                } else if (data.nlc.includes('Implementation') || data.nlc.includes('Partial')) {
+                    nlcDetails = `NLC enacted but pending full or partial implementation. Requires single-state licensure by endorsement temporarily until full status is reached.`;
+                } else {
+                    nlcDetails = `This state has not joined the NLC. Separate single-state licensure by endorsement is required.`;
+                }
+                document.getElementById('nlc-details').textContent = nlcDetails;
+
+                // DPC Contract Mandates Card
+                const dpcCard = document.getElementById('dpc-card');
+                const dpcStatus = data.dpc === 'Enacted' ? 'Enacted' : 'Not Enacted';
+                dpcCard.className = `p-4 rounded-lg ${data.dpc === 'Enacted' ? 'risk-low' : 'risk-high'}`;
+                document.getElementById('dpc-status').textContent = dpcStatus;
+                
+                const refundElement = document.getElementById('dpc-refund');
+                refundElement.textContent = data.dpcRefund === 'Mandated' ? 'YES (Legally Required)' : 'NO (Not Explicitly Mandated)';
+                refundElement.className = data.dpcRefund === 'Mandated' ? 'font-semibold text-red-700' : 'font-semibold text-green-700';
+
+                const eligibleElement = document.getElementById('dpc-eligible');
+                eligibleElement.textContent = data.dpcEligible;
+                eligibleElement.className = data.dpcEligible.startsWith('Y') ? 'font-semibold text-green-700' : 'font-semibold text-red-700';
+            }
+
+            function renderComparisonTable() {
+                const tbody = document.getElementById('comparison-table-body');
+                tbody.innerHTML = '';
+                const filterText = searchInput.value.toLowerCase();
+
+                stateData
+                    .filter(state => state.state.toLowerCase().includes(filterText))
+                    .forEach(state => {
+                        const row = `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${state.state}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRiskClass(state.rnRisk)} bg-opacity-20 text-gray-800">${state.rnRisk}</span></td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRiskClass(state.aprn)} bg-opacity-20 text-gray-800">${state.aprn}</span></td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRiskClass(state.cpom)} bg-opacity-20 text-gray-800">${state.cpom}</span></td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${state.entity}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${state.insurance}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${state.dpc === 'Enacted' ? 'Yes' : 'No'}</td>
+                            </tr>
+                        `;
+                        tbody.innerHTML += row;
+                    });
+            }
+
+            // --- Chart 1: APRN Practice Authority ---
+            function renderAPRNChart() {
+                const ctx = document.getElementById('aprnChart').getContext('2d');
+                const authorityCounts = stateData.reduce((acc, state) => {
+                    acc[state.aprn] = (acc[state.aprn] || 0) + 1;
+                    return acc;
+                }, {});
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Full Practice', 'Reduced Practice', 'Restricted Practice'],
+                        datasets: [{
+                            label: 'Number of States/Jurisdictions',
+                            data: [
+                                authorityCounts['Full'] || 0,
+                                authorityCounts['Reduced'] || 0,
+                                authorityCounts['Restricted'] || 0
+                            ],
+                            backgroundColor: [
+                                'rgba(16, 185, 129, 0.7)', /* Green */
+                                'rgba(245, 158, 11, 0.7)', /* Amber */
+                                'rgba(239, 68, 68, 0.7)' /* Red */
+                            ],
+                            borderColor: [
+                                'rgba(16, 185, 129, 1)',
+                                'rgba(245, 158, 11, 1)',
+                                'rgba(239, 68, 68, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of States & Jurisdictions'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) { return `${context.dataset.label}: ${context.raw}`; }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- Chart 2: RN UPOM Risk ---
+            function renderRNRiskChart() {
+                const ctx = document.getElementById('rnRiskChart').getContext('2d');
+                const riskCounts = stateData.reduce((acc, state) => {
+                    acc[state.rnRisk] = (acc[state.rnRisk] || 0) + 1;
+                    return acc;
+                }, {});
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Extreme Risk', 'High Risk', 'Moderate Risk'],
+                        datasets: [{
+                            label: 'Number of States/Jurisdictions',
+                            data: [
+                                riskCounts['Extreme'] || 0,
+                                riskCounts['High'] || 0,
+                                riskCounts['Moderate'] || 0
+                            ],
+                            backgroundColor: [
+                                'rgba(239, 68, 68, 0.7)', /* Red */
+                                'rgba(251, 113, 133, 0.7)', /* Pinkish Red */
+                                'rgba(245, 158, 11, 0.7)' /* Amber/Moderate */
+                            ],
+                            borderColor: [
+                                'rgba(239, 68, 68, 1)',
+                                'rgba(251, 113, 133, 1)',
+                                'rgba(245, 158, 11, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of States & Jurisdictions'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) { return `${context.dataset.label}: ${context.raw}`; }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            select.addEventListener('change', (e) => updateDashboard(e.target.value));
+
+            navExplorer.addEventListener('click', () => {
+                viewExplorer.classList.remove('hidden');
+                viewComparison.classList.add('hidden');
+                navExplorer.classList.add('active');
+                navComparison.classList.remove('active');
+            });
+
+            navComparison.addEventListener('click', () => {
+                viewExplorer.classList.add('hidden');
+                viewComparison.classList.remove('hidden');
+                navExplorer.classList.remove('active');
+                navComparison.classList.add('active');
+            });
+            
+            searchInput.addEventListener('input', renderComparisonTable);
+
+            populateSelect();
+            // Select Indiana by default since many questions pertain to it
+            select.value = 'Indiana';
+            updateDashboard('Indiana');
+            renderComparisonTable();
+            renderAPRNChart();
+            renderRNRiskChart(); /* New Chart Render */
+        });
+    </script>
+
+</body>
+</html>
+    
+  </body>
+  
+</html>
